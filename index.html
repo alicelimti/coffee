@@ -10,11 +10,15 @@
     <script>
       // GitHub Pages SPA redirect handler
       (function(){
+        if ('scrollRestoration' in history) {
+          history.scrollRestoration = 'manual';
+        }
         var redirect = sessionStorage.redirect;
         delete sessionStorage.redirect;
         if (redirect && redirect !== location.href) {
           history.replaceState(null, null, redirect);
         }
+        window.scrollTo(0, 0);
       })();
     </script>
   </head>
