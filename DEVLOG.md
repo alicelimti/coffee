@@ -123,6 +123,117 @@ GitHub API를 통해 리포지토리 메타데이터를 업데이트했습니다
 
 ---
 
+## 2026-06-10 | 초기 접속 시 Hero 대신 Footer 표시 버그 수정
+
+### 문제
+`https://alicelimti.github.io/coffee/` 첫 접속 시 Hero 섹션이 아닌 Footer가 화면에 표시되고, 새로고침 후에야 정상 화면이 나타남.
+
+### 원인 분석
+
+**1. `BrowserRouter`에 `basename` 누락 (주요 원인)**
+
+GitHub Pages는 `/coffee/` 하위 경로에 배포되므로, 브라우저의 실제 pathname은 `/coffee/`, `/coffee/menu` 등이다. `basename="/coffee"` 없이는 React Router가 이 경로들을 `path="/"`, `path="/menu"` 등과 매칭하지 못해 `<Routes>`가 아무것도 렌더링하지 않음 → `<main>` 비어 있음 → Navbar + Footer만 노출.
+
+**2. 브라우저 스크롤 복원**
+
+`history.replaceState` 호출 시 Safari 등이 이전 방문의 스크롤 위치를 자동 복원해 페이지 하단부터 표시됨.
+
+### 수정 내용
+
+| 파일 | 수정 사항 |
+|---|---|
+| `src/App.jsx` | `BrowserRouter`에 `basename="/coffee"` 추가 |
+| `src/App.jsx` | `ScrollToTop` 컴포넌트 추가 — 라우트 전환 시 스크롤을 상단으로 초기화 |
+| `index.html` | `history.scrollRestoration = 'manual'` — 브라우저 자동 스크롤 복원 비활성화 |
+| `index.html` | `window.scrollTo(0, 0)` — 페이지 로드 시 스크롤 상단 고정 |
+
+---
+
+## 2026-06-10 | 회원 인증 & 커뮤니티 게시판 구현
+
+### 작업 개요
+Supabase를 백엔드로 연동하여 회원 인증 시스템과 커뮤니티 게시판을 구축했습니다.
+
+---
+
+### 기술 스택 추가
+
+| 항목 | 선택 |
+|---|---|
+| 백엔드 / DB | Supabase (PostgreSQL) |
+| 인증 | Supabase Auth — 이메일/비밀번호 + 카카오 OAuth |
+| 환경 변수 | `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` |
+
+---
+
+### 새로 추가된 파일
+
+| 파일 | 역할 |
+|---|---|
+| `src/lib/supabase.js` | Supabase 클라이언트 초기화 |
+| `src/contexts/AuthContext.jsx` | 전역 인증 상태 관리 (`AuthProvider` + `useAuth` hook) |
+| `src/pages/Login.jsx` | 로그인 / 회원가입 페이지 |
+| `src/pages/AuthCallback.jsx` | OAuth 콜백 처리 (카카오 로그인 완료 후 세션 교환) |
+| `src/pages/Board.jsx` | 커뮤니티 게시판 목록 |
+| `src/pages/BoardPost.jsx` | 게시글 상세 보기 |
+| `src/pages/BoardWrite.jsx` | 게시글 작성 / 수정 (공통 컴포넌트) |
+
+---
+
+### 인증 기능 상세
+
+#### 이메일 인증
+- 회원가입: 닉네임 + 이메일 + 비밀번호(6자 이상) + 비밀번호 확인
+- 가입 후 이메일 인증 링크 발송 (Supabase 기본 제공)
+- 로그인: 이메일 + 비밀번호
+
+#### 카카오 소셜 로그인
+- `supabase.auth.signInWithOAuth({ provider: 'kakao' })`
+- 콜백 URL: `/coffee/auth/callback`
+- `AuthCallback` 페이지에서 authorization code → 세션 교환 처리
+
+#### 인증 상태 관리
+- `AuthContext`가 `supabase.auth.getSession()` + `onAuthStateChange`로 전역 user 상태 유지
+- `AuthProvider`는 초기 세션 확인 완료 전까지 자식 렌더링 차단 (로딩 스피너)
+
+---
+
+### 커뮤니티 게시판 상세
+
+#### 라우트 구조
+
+| 경로 | 컴포넌트 | 설명 |
+|---|---|---|
+| `/board` | `Board` | 게시글 목록 (전체 공개) |
+| `/board/write` | `BoardWrite` | 글쓰기 (로그인 필요) |
+| `/board/:id` | `BoardPost` | 게시글 상세 |
+| `/board/:id/edit` | `BoardWrite` | 글 수정 (작성자만) |
+
+#### 데이터 구조 (`posts` 테이블)
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `id` | uuid | 기본 키 |
+| `title` | text | 제목 (최대 100자) |
+| `content` | text | 본문 |
+| `author_id` | uuid | 작성자 user ID |
+| `author_name` | text | 작성자 표시 이름 |
+| `created_at` | timestamptz | 작성 시각 |
+| `updated_at` | timestamptz | 수정 시각 |
+
+#### 권한 정책
+- 목록/상세 조회: 비로그인 포함 전체 공개
+- 글쓰기: 로그인 필요 (미로그인 시 `/login` 리다이렉트)
+- 수정/삭제: 작성자 본인만 가능 (`author_id === user.id` 확인)
+
+---
+
+### 향후 작업 예정
+- [ ] 게시글 댓글 기능
+- [ ] 게시글 페이지네이션
+- [ ] 프로필 페이지 (닉네임/비밀번호 변경)
+- [ ] 관리자 게시글 삭제 권한
+
 ## 2026-06-10 | Supabase 연동 — 로그인 및 게시판 기능 구현
 
 ### 작업 개요
