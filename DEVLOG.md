@@ -74,3 +74,29 @@
 - [ ] 시즌 메뉴 CMS 연동 검토
 - [ ] 모바일 햄버거 메뉴 드롭다운 구현
 - [ ] SEO 메타 태그 추가
+
+---
+
+## 2026-06-10 | GitHub Pages SPA 라우팅 404 에러 수정
+
+### 문제
+배포 후 루트(`/`) 접근은 정상이나, `/menu` · `/about` 등 하위 경로를 직접 URL로 입력하거나 새로고침하면 404 에러 발생.
+
+### 원인 분석
+GitHub Pages는 정적 파일 서버로, `/menu` 같은 경로에 해당하는 실제 파일이 없으면 `404.html`을 반환합니다. React Router는 클라이언트 사이드 라우팅이므로 `index.html`이 먼저 로드돼야 동작합니다.
+
+초기 구현에서 `404.html`과 `index.html`의 리다이렉트 방식이 달라 URL 복원에 실패했습니다.
+
+| 파일 | 수정 전 | 수정 후 |
+|---|---|---|
+| `404.html` | query string 방식(`?/menu`)으로 리다이렉트 | `sessionStorage`에 URL 저장 후 루트로 이동 |
+| `index.html` | `sessionStorage` 방식으로 읽음 | 동일 (변경 없음) |
+
+### 수정 후 동작 흐름
+1. `/coffee/menu` 직접 접근 → GitHub Pages가 `404.html` 반환
+2. `404.html` JS 실행 → `sessionStorage.redirect`에 원래 URL 저장 → `/coffee/`로 리다이렉트
+3. `index.html` JS 실행 → `sessionStorage`에서 URL 읽어 `history.replaceState`로 복원
+4. React Router가 정상 경로를 인식하여 해당 페이지 렌더링
+
+### 수정 파일
+- `public/404.html` — sessionStorage 방식으로 교체
