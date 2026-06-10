@@ -120,3 +120,112 @@ GitHub API를 통해 리포지토리 메타데이터를 업데이트했습니다
 | `description` | `카페` | `CAFÉ 모닝그린 \| 싱글 오리진 핸드드립 카페` |
 
 이제 리포지토리 페이지 About 섹션에서 배포 URL을 바로 확인하고 클릭할 수 있습니다.
+
+---
+
+## 2026-06-10 | Supabase 연동 — 로그인 및 게시판 기능 구현
+
+### 작업 개요
+Supabase를 백엔드로 연결하여 카카오 OAuth·이메일 로그인과 커뮤니티 게시판 기능을 추가했습니다.
+
+---
+
+### 추가된 기술 스택
+
+| 항목 | 선택 |
+|---|---|
+| 백엔드/DB | Supabase (PostgreSQL + Auth) |
+| 인증 | Kakao OAuth · 이메일/비밀번호 |
+| 클라이언트 라이브러리 | `@supabase/supabase-js` |
+
+---
+
+### 신규 파일 구조
+
+```
+src/
+├── lib/
+│   └── supabase.js          — Supabase 클라이언트 초기화
+├── contexts/
+│   └── AuthContext.jsx      — 전역 인증 상태 관리 (Context + Provider)
+└── pages/
+    ├── Login.jsx            — 로그인/회원가입 탭 UI
+    ├── AuthCallback.jsx     — OAuth 리다이렉트 콜백 처리
+    ├── Board.jsx            — 게시글 목록
+    ├── BoardPost.jsx        — 게시글 상세 (수정·삭제 포함)
+    └── BoardWrite.jsx       — 글쓰기·수정 폼 (공용)
+```
+
+---
+
+### 인증 기능
+
+#### 카카오 OAuth
+- Supabase Auth → Kakao Provider 활성화
+- 카카오 개발자 콘솔에서 앱 등록, Web 플랫폼 도메인 및 Redirect URI 설정
+- Redirect URI: `https://brwtobsmjyfsbhowhsmg.supabase.co/auth/v1/callback`
+- 콜백 경로 `/auth/callback`에서 PKCE 코드 교환 후 `/board`로 이동
+
+#### 이메일/비밀번호
+- 로그인과 회원가입을 탭으로 분리한 단일 페이지 UI
+- 회원가입 시 닉네임 입력 → `user_metadata.name`에 저장 → 게시판 작성자명으로 활용
+- Supabase `mailer_autoconfirm: false` 상태이므로 가입 후 이메일 인증 필요
+- 에러 메시지 한국어 처리 (`Invalid login credentials`, `User already registered` 등)
+
+---
+
+### 게시판 기능
+
+#### Supabase `posts` 테이블 스키마
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `id` | UUID (PK) | 자동 생성 |
+| `title` | TEXT | 제목 |
+| `content` | TEXT | 본문 |
+| `author_id` | UUID (FK → auth.users) | 작성자 |
+| `author_name` | TEXT | 표시 이름 |
+| `created_at` | TIMESTAMPTZ | 작성일 |
+| `updated_at` | TIMESTAMPTZ | 수정일 |
+
+#### Row Level Security (RLS) 정책
+
+| 정책 | 대상 |
+|---|---|
+| SELECT | 모든 사용자 (비로그인 포함) |
+| INSERT | 로그인 사용자 본인만 |
+| UPDATE | 작성자 본인만 |
+| DELETE | 작성자 본인만 |
+
+#### 게시판 라우트
+
+| 경로 | 기능 |
+|---|---|
+| `/board` | 글 목록 (최신순) |
+| `/board/write` | 새 글 작성 (로그인 필요) |
+| `/board/:id` | 글 상세 + 본인 글 수정·삭제 |
+| `/board/:id/edit` | 글 수정 폼 |
+
+---
+
+### 트러블슈팅
+
+| 오류 | 원인 | 해결 |
+|---|---|---|
+| `Unsupported provider: provider is not enabled` | Supabase Kakao Provider 미활성화 | 대시보드에서 Kakao 토글 ON + REST API Key / Client Secret 입력 |
+| 카카오 KOE004 (앱 관리자 설정 오류) | 카카오 개발자 콘솔 Web 플랫폼 도메인 미등록 | `https://alicelimti.github.io` 및 `https://brwtobsmjyfsbhowhsmg.supabase.co` 플랫폼 등록 |
+
+---
+
+### 향후 작업 예정 (업데이트)
+- [x] Supabase DB 연결
+- [x] 카카오 OAuth 로그인
+- [x] 이메일/비밀번호 로그인·회원가입
+- [x] 커뮤니티 게시판 CRUD
+- [ ] 댓글 기능
+- [ ] 게시글 페이지네이션
+- [ ] 이미지 첨부 (Supabase Storage)
+- [ ] 실제 카페 이미지 교체
+- [ ] Google Maps 임베드 연동
+- [ ] Contact 폼 이메일 발송 연결
+- [ ] SEO 메타 태그 추가
